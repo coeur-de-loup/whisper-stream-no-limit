@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSS Test</title>
+    <link rel="stylesheet" href="styles.css?v=1.1">
+</head>
+<body>
+    <div class="container">
+        <h1>CSS Test Page</h1>
+        <p>This is a test to verify that CSS styling is working properly.</p>
+        
+        <div class="progress-section">
+            <div class="progress-container">
+                <div class="progress-label">
+                    <div class="progress-stage">Test Progress Stage</div>
+                    <div class="progress-percentage">50%</div>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar" style="width: 50%;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="steps-container">
+            <div class="step step-active">
+                <div class="step-circle">1</div>
+                <div class="step-text">Active Step</div>
+            </div>
+            <div class="step">
+                <div class="step-circle">2</div>
+                <div class="step-text">Normal Step</div>
+            </div>
+            <div class="step step-complete">
+                <div class="step-circle">3</div>
+                <div class="step-text">Complete Step</div>
+            </div>
+        </div>
+        
+        <div id="status" class="status">This is a status message</div>
+    </div>
+</body>
+</html> 

@@ -235,3 +235,44 @@ button:disabled {
 .toggle-section:hover {
     color: #3498db;
 }
+
+.transcript-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
+.transcript-header h3 {
+    margin: 0;
+}
+
+.copy-btn {
+    background-color: #f8f9fa;
+    border: 1px solid #ddd;
+    color: #333;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.copy-btn:hover {
+    background-color: #e9ecef;
+    border-color: #ccc;
+}
+
+.copy-btn.copied {
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+    color: #155724;
+}
+
+.copy-icon {
+    font-size: 16px;
+}

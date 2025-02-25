@@ -4,92 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Whisper Streaming Transcription</title>
-    <style>
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f9f9f9;
-            color: #333;
-        }
-        h1 {
-            color: #2c3e50;
-            margin-bottom: 20px;
-        }
-        .container {
-            background-color: white;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        button {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.2s;
-        }
-        button:hover {
-            background-color: #2980b9;
-        }
-        button:disabled {
-            background-color: #95a5a6;
-            cursor: not-allowed;
-        }
-        #status {
-            margin: 15px 0;
-            padding: 10px;
-            border-radius: 4px;
-            background-color: #f8f9fa;
-        }
-        .progress {
-            height: 20px;
-            margin: 10px 0;
-            background-color: #ecf0f1;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        .progress-bar {
-            height: 100%;
-            background-color: #2ecc71;
-            border-radius: 4px;
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-        #result {
-            margin-top: 20px;
-            white-space: pre-wrap;
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 4px;
-            border-left: 4px solid #3498db;
-        }
-        .chunk-result {
-            margin-bottom: 10px;
-            padding: 8px;
-            background-color: #f0f6fc;
-            border-radius: 4px;
-        }
-        .chunk-complete {
-            border-left: 4px solid #2ecc71;
-        }
-        #error-details {
-            color: #e74c3c;
-            margin-top: 10px;
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css?v=1.0">
 </head>
 <body>
     <div class="container">
@@ -117,16 +32,88 @@
         
         <button id="transcribeBtn">Start Transcription</button>
         
-        <div id="status">Ready</div>
+        <div id="status" class="status">Upload an audio file to start</div>
         
-        <div class="progress">
-            <div class="progress-bar" id="progressBar"></div>
+        <div class="progress-section">
+            <div class="progress-container">
+                <div class="progress-label">
+                    <div class="progress-stage" id="chunkingStage">Splitting audio into chunks</div>
+                    <div class="progress-percentage" id="chunkingPercentage">0%</div>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar" id="chunkingProgressBar"></div>
+                </div>
+            </div>
+            
+            <div class="progress-container">
+                <div class="progress-label">
+                    <div class="progress-stage" id="transcribingStage">Transcribing chunks</div>
+                    <div class="progress-percentage" id="transcribingPercentage">0%</div>
+                </div>
+                <div class="progress">
+                    <div class="progress-bar" id="transcribingProgressBar"></div>
+                </div>
+            </div>
         </div>
         
-        <div id="chunkResults"></div>
+        <div class="steps-container">
+            <div class="step" id="step-upload">
+                <div class="step-circle">1</div>
+                <div class="step-text">Upload audio</div>
+            </div>
+            <div class="step" id="step-analyze">
+                <div class="step-circle">2</div>
+                <div class="step-text">Analyze audio</div>
+            </div>
+            <div class="step" id="step-process">
+                <div class="step-circle">3</div>
+                <div class="step-text">Process audio</div>
+            </div>
+            <div class="step" id="step-result">
+                <div class="step-circle">4</div>
+                <div class="step-text">Show results</div>
+            </div>
+        </div>
         
+        <div class="stats" id="stats" style="display: none;">
+            <div class="primary-stats">
+                <div class="stat">
+                    <div class="stat-value" id="audioDuration">0:00</div>
+                    <div class="stat-label">Audio Duration</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="processingTime">0:00</div>
+                    <div class="stat-label">Processing Time</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="speedRatio">0.0x</div>
+                    <div class="stat-label">Speed Ratio</div>
+                </div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="chunksTotal">0</div>
+                <div class="stat-label">Total Chunks</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="chunksProcessed">0</div>
+                <div class="stat-label">Processed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="wordCount">0</div>
+                <div class="stat-label">Words</div>
+            </div>
+        </div>
+        
+        <div class="transcript-header">
+            <h3>Transcript</h3>
+            <button id="copyBtn" class="copy-btn" title="Copy to clipboard">
+                <span class="copy-icon">📋</span> Copy
+            </button>
+        </div>
         <div id="result"></div>
-        <div id="error-details"></div>
+        
+        <div class="toggle-section" id="toggleEvents">Show Event Log ▼</div>
+        <div id="events" style="display: none;"></div>
     </div>
 
     <script>
@@ -135,12 +122,93 @@
             const audioFileInput = document.getElementById('audioFile');
             const languageSelect = document.getElementById('language');
             const statusDiv = document.getElementById('status');
-            const progressBar = document.getElementById('progressBar');
+            const copyBtn = document.getElementById('copyBtn');
+            
+            // Progress bar elements
+            const chunkingProgressBar = document.getElementById('chunkingProgressBar');
+            const chunkingStage = document.getElementById('chunkingStage');
+            const chunkingPercentage = document.getElementById('chunkingPercentage');
+            const transcribingProgressBar = document.getElementById('transcribingProgressBar');
+            const transcribingStage = document.getElementById('transcribingStage');
+            const transcribingPercentage = document.getElementById('transcribingPercentage');
+            
             const resultDiv = document.getElementById('result');
-            const chunkResultsDiv = document.getElementById('chunkResults');
-            const errorDetailsDiv = document.getElementById('error-details');
+            const eventsDiv = document.getElementById('events');
+            const statsDiv = document.getElementById('stats');
+            const chunksTotal = document.getElementById('chunksTotal');
+            const chunksProcessed = document.getElementById('chunksProcessed');
+            const audioDuration = document.getElementById('audioDuration');
+            const processingTime = document.getElementById('processingTime');
+            const speedRatio = document.getElementById('speedRatio');
+            const wordCount = document.getElementById('wordCount');
+            const toggleEvents = document.getElementById('toggleEvents');
+            const stepsContainer = document.querySelector('.steps-container');
+            
+            // Step elements
+            const stepUpload = document.getElementById('step-upload');
+            const stepAnalyze = document.getElementById('step-analyze');
+            const stepProcess = document.getElementById('step-process');
+            const stepResult = document.getElementById('step-result');
+            
+            // Define a variable to track log detail level
+            const logDetailedProgress = true;
             
             let streaming = false;
+            let startTime = 0;
+            let timerInterval = null;
+            let totalChunks = 0;
+            let createdChunks = 0;
+            let transcribedChunks = 0;
+            let audioDurationSecs = 0;
+            let combinedText = '';
+            let completedChunks = {};
+            // Add a flag to track if transcription has started
+            let transcriptionStarted = false;
+            // Add a flag to track if transcription is complete
+            let transcriptionComplete = false;
+            // Add variables to track activity and implement timeouts
+            let lastProgressTime = 0;
+            let progressTimeoutInterval = null;
+            const PROGRESS_TIMEOUT = 60000; // 60 seconds with no progress should force completion
+            const TOTAL_TIMEOUT = 300000; // 5 minutes total max processing time
+            
+            // Toggle events log
+            toggleEvents.addEventListener('click', function() {
+                if (eventsDiv.style.display === 'none') {
+                    eventsDiv.style.display = 'block';
+                    toggleEvents.textContent = 'Hide Event Log ▲';
+                } else {
+                    eventsDiv.style.display = 'none';
+                    toggleEvents.textContent = 'Show Event Log ▼';
+                }
+            });
+            
+            // Copy button functionality
+            copyBtn.addEventListener('click', function() {
+                const textToCopy = resultDiv.textContent;
+                if (textToCopy.trim() === '') {
+                    statusDiv.textContent = 'No transcription to copy';
+                    return;
+                }
+                
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => {
+                        // Temporarily change button text to indicate success
+                        const originalText = copyBtn.innerHTML;
+                        copyBtn.innerHTML = '<span class="copy-icon">✓</span> Copied!';
+                        copyBtn.classList.add('copied');
+                        
+                        // Revert back after 2 seconds
+                        setTimeout(() => {
+                            copyBtn.innerHTML = originalText;
+                            copyBtn.classList.remove('copied');
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        console.error('Failed to copy text: ', err);
+                        statusDiv.textContent = 'Failed to copy: ' + err;
+                    });
+            });
             
             transcribeBtn.addEventListener('click', function() {
                 const file = audioFileInput.files[0];
@@ -152,10 +220,52 @@
                 // Reset UI
                 transcribeBtn.disabled = true;
                 statusDiv.textContent = 'Starting transcription...';
-                progressBar.style.width = '0%';
+                
+                // Reset progress bars
+                updateChunkingProgress(0, 'Waiting to start');
+                updateTranscribingProgress(0, 'Waiting to start');
+                
+                // Reset transcription started flag and complete flag
+                transcriptionStarted = false;
+                transcriptionComplete = false;
+                
+                // Reset progress tracking
+                lastProgressTime = Date.now();
+                
                 resultDiv.textContent = '';
-                chunkResultsDiv.innerHTML = '';
-                errorDetailsDiv.textContent = '';
+                
+                // Show event log for better monitoring during transcription
+                eventsDiv.style.display = 'block';
+                toggleEvents.textContent = 'Hide Event Log ▲';
+                eventsDiv.innerHTML = '';
+                
+                // Reset steps
+                resetSteps();
+                setStepActive('step-upload');
+                
+                // Reset stats
+                statsDiv.style.display = 'flex';
+                chunksTotal.textContent = '?';
+                chunksProcessed.textContent = '0';
+                audioDuration.textContent = '0:00';
+                processingTime.textContent = '0:00';
+                speedRatio.textContent = '0.0x';
+                wordCount.textContent = '0';
+                
+                // Reset variables
+                combinedText = '';
+                completedChunks = {};
+                audioDurationSecs = 0;
+                createdChunks = 0;
+                transcribedChunks = 0;
+                
+                // Start timer
+                startTime = Date.now();
+                updateTimer();
+                timerInterval = setInterval(updateTimer, 1000);
+                
+                // Start progress timeout monitor
+                startProgressMonitor();
                 
                 // Create form data
                 const formData = new FormData();
@@ -171,10 +281,127 @@
                 startTranscription(formData);
             });
             
+            function formatTime(seconds) {
+                if (seconds < 60) {
+                    return `${seconds}s`;
+                }
+                
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+            
+            function formatDuration(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = Math.floor(seconds % 60);
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+            
+            function updateTimer() {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                processingTime.textContent = formatTime(elapsed);
+                
+                // Update speed ratio if we have audio duration
+                if (audioDurationSecs > 0) {
+                    const ratio = audioDurationSecs / elapsed;
+                    speedRatio.textContent = ratio.toFixed(1) + 'x';
+                }
+            }
+            
+            function resetSteps() {
+                // Get all step elements directly instead of using stepsContainer
+                const steps = document.querySelectorAll('.step');
+                steps.forEach(step => {
+                    // Reset to default state - not 'step-pending' which doesn't exist in the new design
+                    step.className = 'step';
+                    
+                    // Clear any small text that might have been added
+                    const textEl = step.querySelector('.step-text');
+                    if (textEl) {
+                        // Reset to original text without any <br> or added content
+                        const originalText = textEl.innerHTML.split('<br>')[0];
+                        textEl.innerHTML = originalText;
+                    }
+                });
+                console.log('All steps reset to default state');
+            }
+            
+            function setStepActive(stepId) {
+                const step = document.getElementById(stepId);
+                if (step) {
+                    // Clear any previous classes and set as active
+                    step.className = 'step step-active';
+                }
+            }
+            
+            function setStepComplete(stepId, info) {
+                const step = document.getElementById(stepId);
+                if (step) {
+                    // Set as complete
+                    step.className = 'step step-complete';
+                    
+                    // If provided, update step info text
+                    if (info) {
+                        // Find the step-text element within this step
+                        const textEl = step.querySelector('.step-text');
+                        if (textEl) {
+                            textEl.innerHTML = `${textEl.innerHTML.split('<br>')[0]}<br><small>${info}</small>`;
+                        }
+                    }
+                }
+            }
+            
+            // Separate progress update functions for chunking and transcribing
+            function updateChunkingProgress(percent, stage) {
+                chunkingProgressBar.style.width = `${percent}%`;
+                chunkingPercentage.textContent = `${Math.round(percent)}%`;
+                if (stage) {
+                    chunkingStage.textContent = stage;
+                }
+            }
+            
+            function updateTranscribingProgress(percent, stage) {
+                // Don't reset to 0 if transcription has already started and percent is 0
+                if (percent === 0 && transcriptionStarted) {
+                    // Skip this update if we're trying to reset back to 0
+                    return;
+                }
+                
+                // If percent is > 0 and this is the first time, mark transcription as started
+                if (percent > 0 && !transcriptionStarted) {
+                    transcriptionStarted = true;
+                }
+                
+                transcribingProgressBar.style.width = `${percent}%`;
+                transcribingPercentage.textContent = `${Math.round(percent)}%`;
+                if (stage) {
+                    transcribingStage.textContent = stage;
+                }
+            }
+            
+            function updateTranscriptText() {
+                // Sort chunk indices
+                const indices = Object.keys(completedChunks).map(Number).sort((a, b) => a - b);
+                
+                // Combine texts in order
+                const texts = indices.map(idx => completedChunks[idx]);
+                combinedText = texts.join(' ');
+                
+                // Update the result div
+                resultDiv.textContent = combinedText;
+                
+                // Update word count
+                const words = combinedText.split(/\s+/).filter(Boolean).length;
+                wordCount.textContent = words;
+            }
+            
             async function startTranscription(formData) {
                 try {
+                    // Log that we're starting the request
+                    logEvent('Starting transcription request to server', 'update');
+                    
                     // Make a POST request to the streaming endpoint
-                    const response = await fetch('http://localhost:8000/transcribe/stream', {
+                    const response = await fetch('/api/transcribe/stream', {
                         method: 'POST',
                         body: formData
                     });
@@ -183,111 +410,493 @@
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
                     
+                    // Log that we've received a response
+                    logEvent('Received response from server, starting stream processing', 'update');
+                    
                     // Get a reader for the response body
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let buffer = '';
+                    
+                    // Track time between updates
+                    let lastUpdateTime = Date.now();
                     
                     // Read the stream
                     while (streaming) {
                         const { done, value } = await reader.read();
                         
                         if (done) {
-                            console.log('Stream complete');
+                            logEvent('Stream complete', 'update');
                             break;
                         }
                         
+                        // Log that we've received data with time since last update
+                        const now = Date.now();
+                        const timeSinceLastUpdate = (now - lastUpdateTime) / 1000;
+                        lastUpdateTime = now;
+                        
+                        if (value && value.length > 0) {
+                            logEvent(`Received ${value.length} bytes from stream (${timeSinceLastUpdate.toFixed(2)}s since last update)`, 'update');
+                        }
+                        
                         // Decode and process the chunk
-                        buffer += decoder.decode(value, { stream: true });
+                        const chunk = decoder.decode(value, { stream: true });
+                        buffer += chunk;
+                        
+                        // Debug raw received data if it's short (not dumping huge amounts of data)
+                        if (chunk.length < 300) {
+                            console.log('Raw received data:', chunk);
+                        }
+                        
+                        // Special check for splitting events that might be missed
+                        if (chunk.includes('"status":"splitting"')) {
+                            console.log('%c SPLITTING EVENT DETECTED IN RAW DATA', 'background: red; color: white');
+                            // Force UI update to splitting stage immediately without waiting for processing
+                            setStepComplete('step-analyze', 'Complete');
+                            setStepActive('step-process');
+                            statusDiv.textContent = 'Splitting audio into chunks...';
+                            updateChunkingProgress(5, 'Starting to split audio');
+                            logEvent('Splitting event detected in raw data', 'splitting');
+                        }
                         
                         // Process complete SSE messages
                         const messages = buffer.split('\n\n');
                         buffer = messages.pop() || ''; // Keep the last incomplete message in the buffer
                         
+                        if (messages.length > 0) {
+                            logEvent(`Processing ${messages.length} messages from stream`, 'update');
+                            console.log(`Processing ${messages.length} SSE messages`);
+                        }
+                        
                         for (const message of messages) {
                             if (message.trim() && message.startsWith('data: ')) {
                                 const data = message.replace('data: ', '');
                                 try {
+                                    console.log('Raw data from server:', data);
                                     const parsedData = JSON.parse(data);
+                                    console.log('Parsed event data:', parsedData, 'with status:', parsedData.status);
+                                    
+                                    // Add to event log with detailed type
+                                    logEvent(`Received event: ${parsedData.status}${parsedData.message ? ' - ' + parsedData.message : ''}`, parsedData.status);
+                                    
+                                    // For debugging - add specific log for splitting events
+                                    if (parsedData.status === 'splitting') {
+                                        console.log('%c SPLITTING EVENT DETECTED', 'background: yellow; color: black');
+                                        // Force UI update to splitting stage
+                                        setStepComplete('step-analyze', 'Complete');
+                                        setStepActive('step-process');
+                                        statusDiv.textContent = 'Splitting audio into chunks...';
+                                        
+                                        // Make sure event log is visible for debugging
+                                        eventsDiv.style.display = 'block';
+                                        toggleEvents.textContent = 'Hide Event Log ▲';
+                                    }
+                                    
+                                    // Process the event
                                     processStreamEvent(parsedData);
                                 } catch (e) {
                                     console.error('Error parsing JSON:', e, data);
-                                    errorDetailsDiv.textContent = `JSON parsing error: ${e.message}, received: ${data}`;
+                                    logEvent(`JSON parsing error: ${e.message}`, 'error');
                                 }
+                            } else {
+                                console.warn('Received message in unexpected format:', message);
+                                logEvent(`Invalid message format received: ${message.substring(0, 50)}...`, 'error');
                             }
                         }
                     }
                 } catch (error) {
                     console.error('Fetch error:', error);
                     statusDiv.textContent = `Error: ${error.message}`;
-                    errorDetailsDiv.textContent = `Detailed error: ${error.stack || error}`;
+                    logEvent(`Error: ${error.message}`, 'error');
                     transcribeBtn.disabled = false;
+                    if (timerInterval) clearInterval(timerInterval);
+                }
+            }
+            
+            function logEvent(message, type) {
+                const eventDiv = document.createElement('div');
+                eventDiv.className = `event event-${type || 'info'}`;
+                
+                const time = new Date().toTimeString().split(' ')[0];
+                eventDiv.textContent = `[${time}] ${message}`;
+                
+                eventsDiv.prepend(eventDiv);
+                
+                // Limit the number of events shown
+                if (eventsDiv.children.length > 100) {
+                    eventsDiv.removeChild(eventsDiv.lastChild);
                 }
             }
             
             function processStreamEvent(data) {
-                console.log('Stream event:', data);
+                console.log('Processing stream event:', data);
+                
+                // Add more detailed logging
+                console.log(`Event type: ${data.status}, Message: ${data.message || 'no message'}`);
+                
+                // Log the event
+                logEvent(`${data.status}${data.message ? ': ' + data.message : ''}`, data.status);
+                
+                // Update the progress timeout tracker for any real progress
+                if (['chunk_result', 'chunk_created', 'splitting', 'progress_update'].includes(data.status)) {
+                    lastProgressTime = Date.now();
+                }
+                
+                // Make sure the status field is updated, but don't override the complete state
+                if (!transcriptionComplete || data.status === 'complete') {
+                    statusDiv.textContent = data.message || `Event: ${data.status}`;
+                }
                 
                 switch (data.status) {
                     case 'processing':
-                        statusDiv.textContent = data.message;
+                        // Determine which step we're in based on the message
+                        if (data.message && data.message.includes('uploaded')) {
+                            // File is uploaded, beginning audio processing
+                            setStepComplete('step-upload', 'Complete');
+                            setStepActive('step-analyze');
+                            updateChunkingProgress(0, 'Analyzing audio');
+                            updateTranscribingProgress(0, 'Waiting for chunks');
+                        } else {
+                            // General processing message
+                            statusDiv.textContent = data.message || 'Processing audio...';
+                            setStepActive('step-analyze');
+                            updateChunkingProgress(0, 'Analyzing audio');
+                        }
                         break;
                         
                     case 'uploading':
-                        statusDiv.textContent = `Uploading: ${Math.round(data.bytes_processed / 1024 / 1024)} MB`;
+                        statusDiv.textContent = `Uploading: ${data.mb_processed || Math.round(data.bytes_processed / 1024 / 1024)} MB`;
+                        // Show upload progress (0-100%)
+                        const uploadProgress = Math.min(100, (data.bytes_processed / 1024 / 1024) * 20);
+                        updateChunkingProgress(0, 'Uploading file');
+                        updateTranscribingProgress(0, 'Waiting for upload');
+                        setStepActive('step-upload');
+                        break;
+                        
+                    case 'progress_update':
+                        console.log('PROGRESS UPDATE:', data);
+                        
+                        // Update status message
+                        statusDiv.textContent = data.message || 'Processing audio...';
+                        
+                        // Update chunking progress if available
+                        if (data.chunking_progress) {
+                            const chunkingProgress = data.chunking_progress;
+                            if (chunkingProgress.created !== undefined && chunkingProgress.total) {
+                                const percent = (chunkingProgress.created / chunkingProgress.total) * 100;
+                                updateChunkingProgress(
+                                    percent, 
+                                    `Created ${chunkingProgress.created}/${chunkingProgress.total} chunks`
+                                );
+                                
+                                // Log event
+                                if (logDetailedProgress) {
+                                    logEvent(`Chunking progress: ${chunkingProgress.created}/${chunkingProgress.total} chunks (${Math.round(percent)}%)`, 'progress');
+                                }
+                            }
+                        }
+                        
+                        // Update transcription progress if available
+                        if (data.transcription_progress) {
+                            const transcribingProgress = data.transcription_progress;
+                            if (transcribingProgress.processed !== undefined && transcribingProgress.total) {
+                                const percent = (transcribingProgress.processed / transcribingProgress.total) * 100;
+                                updateTranscribingProgress(
+                                    percent, 
+                                    `Transcribed ${transcribingProgress.processed}/${transcribingProgress.total} chunks`
+                                );
+                                
+                                // Update the chunks processed counter in the stats display
+                                // Only update if it's not decreasing and transcription has started
+                                if (!transcriptionStarted || transcribingProgress.processed >= parseInt(chunksProcessed.textContent || '0')) {
+                                    chunksProcessed.textContent = transcribingProgress.processed;
+                                    if (transcribingProgress.processed > 0) {
+                                        transcriptionStarted = true;
+                                    }
+                                }
+                                
+                                chunksTotal.textContent = transcribingProgress.total;
+                                transcribedChunks = transcribingProgress.processed;
+                                totalChunks = transcribingProgress.total;
+                                
+                                // Log event
+                                if (logDetailedProgress) {
+                                    logEvent(`Transcription progress: ${transcribingProgress.processed}/${transcribingProgress.total} chunks (${Math.round(percent)}%)`, 'progress');
+                                }
+                            }
+                        }
+                        
+                        // If we have additional stats, update them
+                        if (data.stats) {
+                            // Add any additional stats updates here
+                        }
                         break;
                         
                     case 'splitting':
-                        statusDiv.textContent = `Splitting audio (${data.duration.toFixed(1)}s) into ${data.total_chunks} chunks`;
+                        console.log('HANDLING SPLITTING EVENT:', data);
+                        // We're now in the chunking phase
+                        setStepComplete('step-analyze', 'Complete');
+                        setStepActive('step-process');
+                        
+                        statusDiv.textContent = data.message || 'Splitting audio into chunks...';
+                        
+                        // Reset chunking progress
+                        updateChunkingProgress(5, 'Starting to split audio');
+                        updateTranscribingProgress(0, 'Waiting for chunks');
+                        
+                        // If we have duration, update audio duration stat
+                        if (data.duration) {
+                            audioDurationSecs = data.duration;
+                            audioDuration.textContent = formatDuration(data.duration);
+                            
+                            // Log the duration for better UX
+                            logEvent(`Audio duration: ${formatDuration(data.duration)}`, 'update');
+                        }
+                        
+                        // Update total chunks
+                        if (data.total_chunks) {
+                            chunksTotal.textContent = data.total_chunks;
+                            totalChunks = data.total_chunks;
+                            
+                            // Log the chunk count
+                            logEvent(`Will process ${data.total_chunks} chunks`, 'splitting');
+                        }
+                        
+                        logEvent(`Starting to process ${data.total_chunks || '?'} chunks`, 'splitting');
+                        break;
+                    
+                    case 'chunk_ready':
+                        // A chunk has been created and is ready for transcription
+                        setStepActive('step-process');
+                        
+                        // Update chunking progress
+                        if (data.chunk && totalChunks) {
+                            createdChunks = data.chunk;
+                            const chunkingPercent = (createdChunks / totalChunks) * 100;
+                            updateChunkingProgress(chunkingPercent, `Created ${createdChunks}/${totalChunks} chunks`);
+                            
+                            // Log the chunk info
+                            logEvent(`Chunk ${data.chunk}/${totalChunks} ready for transcription`, 'chunk_created');
+                        }
                         break;
                         
                     case 'chunk_created':
-                        statusDiv.textContent = `Created chunk ${data.chunk}/${data.total_chunks}`;
-                        // Update progress for chunk creation (50% of total progress)
-                        const splitProgress = (data.chunk / data.total_chunks) * 50;
-                        progressBar.style.width = `${splitProgress}%`;
+                        // A new chunk has been created
+                        setStepActive('step-process');
+                        
+                        statusDiv.textContent = data.message || `Creating chunk ${data.chunk}/${data.total_chunks}`;
+                        logEvent(`Created chunk ${data.chunk}/${data.total_chunks}`, 'chunk_created');
+                        
+                        // Update chunking progress
+                        if (data.chunk && data.total_chunks) {
+                            createdChunks = data.chunk;
+                            const chunkingPercent = (createdChunks / data.total_chunks) * 100;
+                            updateChunkingProgress(chunkingPercent, `Created ${createdChunks}/${data.total_chunks} chunks`);
+                            
+                            // Update total chunks
+                            chunksTotal.textContent = data.total_chunks;
+                            totalChunks = data.total_chunks;
+                        }
+                        
+                        // If all chunks created, mark chunking step as complete
+                        if (data.chunk === data.total_chunks) {
+                            setStepComplete('step-process', `${data.total_chunks} chunks`);
+                        }
+                        break;
+                    
+                    case 'transcribing':
+                        // Transcription of a chunk has started
+                        // Make sure transcribing step is active
+                        if (transcribedChunks === 0) {
+                            setStepActive('step-process');
+                        }
+                        
+                        logEvent(`Transcribing chunk ${data.chunk_index + 1}`, 'update');
                         break;
                         
                     case 'chunk_result':
-                        // Create or update chunk result display
-                        let chunkDiv = document.getElementById(`chunk-${data.chunk_index}`);
-                        if (!chunkDiv) {
-                            chunkDiv = document.createElement('div');
-                            chunkDiv.id = `chunk-${data.chunk_index}`;
-                            chunkDiv.className = 'chunk-result';
-                            chunkDiv.innerHTML = `<strong>Chunk ${data.chunk_index + 1}/${data.total_chunks}:</strong> <span class="chunk-text"></span>`;
-                            chunkResultsDiv.appendChild(chunkDiv);
+                        console.log('Received chunk result:', data);
+                        
+                        // Store the chunk result
+                        if (data.text && data.chunk_index !== undefined) {
+                            completedChunks[data.chunk_index] = data.text;
+                            updateTranscriptText();
                         }
                         
-                        chunkDiv.querySelector('.chunk-text').textContent = data.text;
+                        // Make sure the transcribing step is active
+                        setStepActive('step-process');
                         
-                        if (data.is_final) {
-                            chunkDiv.classList.add('chunk-complete');
+                        // Update transcribed chunks counter - only if increasing or same
+                        if (data.chunks_processed) {
+                            if (!transcriptionStarted || data.chunks_processed >= transcribedChunks) {
+                                transcribedChunks = data.chunks_processed;
+                                chunksProcessed.textContent = transcribedChunks;
+                                if (transcribedChunks > 0) {
+                                    transcriptionStarted = true;
+                                }
+                            }
+                        } else {
+                            const chunkCount = Object.keys(completedChunks).length;
+                            if (!transcriptionStarted || chunkCount >= transcribedChunks) {
+                                transcribedChunks = chunkCount;
+                                chunksProcessed.textContent = transcribedChunks;
+                                if (transcribedChunks > 0) {
+                                    transcriptionStarted = true;
+                                }
+                            }
                         }
                         
-                        // Update progress (remaining 50% of progress bar)
-                        const processedCount = document.querySelectorAll('.chunk-result').length;
-                        const processProgress = 50 + ((processedCount / data.total_chunks) * 50);
-                        progressBar.style.width = `${processProgress}%`;
+                        // Update progress for transcription and ensure transcriptionStarted is true
+                        const totalToProcess = data.chunks_total || totalChunks;
+                        if (transcribedChunks > 0 && totalToProcess > 0) {
+                            const transcribeProgress = (transcribedChunks / totalToProcess) * 100;
+                            
+                            // Ensure transcriptionStarted is true when we have a result
+                            if (transcribeProgress > 0) {
+                                transcriptionStarted = true;
+                            }
+                            
+                            updateTranscribingProgress(
+                                transcribeProgress, 
+                                `Transcribed ${transcribedChunks}/${totalToProcess} chunks`
+                            );
+                        }
                         
-                        statusDiv.textContent = `Processed ${processedCount}/${data.total_chunks} chunks`;
+                        // Update status
+                        statusDiv.textContent = `Transcribed ${transcribedChunks}/${totalToProcess || '?'} chunks`;
+                        
+                        // If all chunks are transcribed, mark the transcribing step as complete
+                        if (transcribedChunks === totalToProcess) {
+                            setStepComplete('step-process', `${transcribedChunks} chunks`);
+                            setStepActive('step-result');
+                        }
                         break;
                         
                     case 'complete':
-                        statusDiv.textContent = `Transcription complete (${data.processing_time.toFixed(2)}s)`;
-                        resultDiv.textContent = data.text;
-                        progressBar.style.width = '100%';
+                        console.log('Transcription complete:', data);
+                        
+                        // Set the transcription complete flag
+                        transcriptionComplete = true;
+                        
+                        // Stop the timer
+                        if (timerInterval) clearInterval(timerInterval);
+                        
+                        // Stop the progress monitor
+                        if (progressTimeoutInterval) clearInterval(progressTimeoutInterval);
+                        
+                        // Reset transcriptionStarted for next run
+                        transcriptionStarted = false;
+                        
+                        // If we have a complete text result, use it instead of the chunks
+                        if (data.text) {
+                            resultDiv.textContent = data.text;
+                            combinedText = data.text;
+                            console.log("Final transcription result received:", data.text.substring(0, 100) + "...");
+                        } else {
+                            console.log("No text in complete event, using combined chunks:", combinedText.substring(0, 100) + "...");
+                        }
+                        
+                        // Make sure both chunking and transcribing steps are complete
+                        if (document.getElementById('step-process').className.indexOf('step-complete') === -1) {
+                            setStepComplete('step-process', `${totalChunks || '?'} chunks`);
+                        }
+                        
+                        if (document.getElementById('step-process').className.indexOf('step-complete') === -1) {
+                            setStepComplete('step-process', `${transcribedChunks || Object.keys(completedChunks).length} chunks`);
+                        }
+                        
+                        // Update UI
+                        setStepComplete('step-result', `${formatTime(data.processing_time)}`);
+                        updateChunkingProgress(100, 'Complete');
+                        updateTranscribingProgress(100, 'Complete');
+                        
+                        // Update status - make this clear and prominently show completion
+                        statusDiv.textContent = `✅ Transcription complete (${data.processing_time.toFixed(2)}s)`;
+                        statusDiv.style.color = '#2ecc71'; // Green color to indicate success
                         transcribeBtn.disabled = false;
                         streaming = false;
+                        
+                        // Update final stats
+                        if (data.chunks_total) {
+                            chunksTotal.textContent = data.chunks_total;
+                            chunksProcessed.textContent = data.chunks_total;
+                        } else {
+                            chunksTotal.textContent = Object.keys(completedChunks).length;
+                            chunksProcessed.textContent = Object.keys(completedChunks).length;
+                        }
+                        
+                        // Update word count
+                        if (data.word_count) {
+                            wordCount.textContent = data.word_count;
+                        } else {
+                            // Calculate word count from the text
+                            wordCount.textContent = combinedText.split(/\s+/).filter(Boolean).length;
+                        }
+                        
+                        // Calculate final speed ratio
+                        if (audioDurationSecs > 0 && data.processing_time > 0) {
+                            const ratio = audioDurationSecs / data.processing_time;
+                            speedRatio.textContent = ratio.toFixed(1) + 'x';
+                            
+                            // Log final stats
+                            logEvent(`Transcription complete: ${audioDurationSecs.toFixed(1)}s of audio processed in ${data.processing_time.toFixed(1)}s (${ratio.toFixed(1)}x speed)`, 'complete');
+                        }
                         break;
                         
                     case 'error':
+                        console.error('Error event:', data);
+                        if (timerInterval) clearInterval(timerInterval);
                         statusDiv.textContent = `Error: ${data.message}`;
-                        errorDetailsDiv.textContent = `Error details: ${JSON.stringify(data)}`;
+                        statusDiv.style.color = '#e74c3c'; // Red color to indicate error
                         transcribeBtn.disabled = false;
                         streaming = false;
                         break;
                 }
+            }
+            
+            function startProgressMonitor() {
+                // Clear any existing interval
+                if (progressTimeoutInterval) {
+                    clearInterval(progressTimeoutInterval);
+                }
+                
+                // Check for progress timeouts every 5 seconds
+                progressTimeoutInterval = setInterval(() => {
+                    const now = Date.now();
+                    
+                    // If we've already gotten results and have been inactive for too long, force completion
+                    if (transcriptionStarted && 
+                        !transcriptionComplete && 
+                        Object.keys(completedChunks).length > 0 &&
+                        now - lastProgressTime > PROGRESS_TIMEOUT) {
+                        
+                        console.warn(`No progress for ${PROGRESS_TIMEOUT/1000} seconds with results, forcing completion`);
+                        logEvent(`No progress for ${PROGRESS_TIMEOUT/1000} seconds, forcing completion`, 'warning');
+                        
+                        forceTranscriptionComplete();
+                    }
+                    
+                    // Force completion if we've been processing for too long regardless of progress
+                    if (!transcriptionComplete && now - startTime > TOTAL_TIMEOUT) {
+                        console.warn(`Total processing time of ${TOTAL_TIMEOUT/1000} seconds exceeded, forcing completion`);
+                        logEvent(`Total processing timeout of ${TOTAL_TIMEOUT/1000} seconds exceeded, forcing completion`, 'warning');
+                        
+                        forceTranscriptionComplete();
+                    }
+                }, 5000);
+            }
+            
+            function forceTranscriptionComplete() {
+                // Stop the streaming
+                streaming = false;
+                
+                // Send a synthetic complete event to our own processor
+                processStreamEvent({
+                    status: 'complete',
+                    message: 'Transcription timed out but results are available',
+                    processing_time: (Date.now() - startTime) / 1000,
+                    text: combinedText || 'Partial transcription result'
+                });
             }
         });
     </script>

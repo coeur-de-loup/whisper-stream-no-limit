@@ -5,8 +5,31 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
+    # Remove direct port mapping so it's not exposed to host
+    # ports:
+    #   - "8000:8000"
     env_file:
       - .env
     restart: unless-stopped
+    networks:
+      - whisper-network
+    # Add container name for easier referencing in client
+    container_name: whisper-api
+
+  client:
+    image: nginx:alpine
+    volumes:
+      - ./public:/usr/share/nginx/html
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    ports:
+      - "80:80"
+    depends_on:
+      - whisper-transcription-service
+    networks:
+      - whisper-network
+    container_name: whisper-client
+
+# Define a bridge network to allow internal communication
+networks:
+  whisper-network:
+    driver: bridge
