@@ -47,6 +47,10 @@ async def cleanup_temp_files(session_dir: Path, original_file: str):
 # Function to split audio for streaming mode
 async def split_audio(audio_path, chunk_queue, result_queue):
     """Split audio file into chunks and put them in the queue for processing"""
+    # Initialize variables used in finally block
+    created_chunks = 0
+    chunk_order = []
+
     try:
         # Get audio information
         duration_cmd = [
@@ -117,7 +121,6 @@ async def split_audio(audio_path, chunk_queue, result_queue):
         await result_queue.put(chunking_progress)
 
         # Create chunks
-        chunk_order = []  # Track the order of chunks
         created_chunks = 0
 
         for i in range(chunk_count):
@@ -237,9 +240,7 @@ async def split_audio(audio_path, chunk_queue, result_queue):
             {
                 "status": "task_complete",
                 "task": "splitter",
-                "created_chunks": created_chunks if "created_chunks" in locals() else 0,
-                "chunk_order_length": len(chunk_order)
-                if "chunk_order" in locals()
-                else 0,
+                "created_chunks": created_chunks,
+                "chunk_order_length": len(chunk_order),
             }
         )

@@ -26,7 +26,9 @@ router = APIRouter()
 
 TEMP_DIR = Path("/tmp/whisper_chunks")
 TEMP_DIR.mkdir(exist_ok=True)
-MAX_PARALLEL_CHUNKS = int(os.getenv("MAX_PARALLEL_CHUNKS", 5))
+# Fix the environment variable parsing to handle spaces in the .env file
+MAX_PARALLEL_CHUNKS = int(os.getenv("MAX_PARALLEL_CHUNKS", "5").strip())
+logger.info(f"Configured to process up to {MAX_PARALLEL_CHUNKS} chunks in parallel")
 
 
 async def process_chunks(
@@ -54,7 +56,9 @@ async def process_chunks(
                     )
 
                     # Log when we start processing a chunk
-                    logger.info(f"Starting transcription of chunk {chunk_index + 1}")
+                    logger.info(
+                        f"Starting transcription of chunk {chunk_index + 1} (Active tasks: {len(active_tasks) + 1}/{MAX_PARALLEL_CHUNKS})"
+                    )
 
                     # IMPORTANT: Add chunk index to sent_chunk_indices to track what we've sent to the API
                     sent_chunk_indices.add(chunk_index)
@@ -72,6 +76,7 @@ async def process_chunks(
                             "status": "chunk_processing",
                             "chunk_index": chunk_index,
                             "message": f"Transcribing chunk {chunk_index + 1}",
+                            "parallel_status": f"Processing {len(active_tasks)}/{MAX_PARALLEL_CHUNKS} chunks in parallel",
                         }
                     )
 
@@ -138,7 +143,9 @@ async def process_chunks(
                     # Add to processed chunks and results
                     processed_chunks.append(chunk_index)
                     results.append((chunk_index, text))
-                    logger.info(f"Completed transcription of chunk {chunk_index + 1}")
+                    logger.info(
+                        f"Completed transcription of chunk {chunk_index + 1} (Active tasks remaining: {len(active_tasks)}/{MAX_PARALLEL_CHUNKS})"
+                    )
 
                     # Send update about this chunk being completed
                     chunk_result = {
@@ -147,6 +154,7 @@ async def process_chunks(
                         "chunks_processed": len(processed_chunks),
                         "text": text,
                         "message": f"Transcribed chunk {chunk_index + 1}",
+                        "parallel_status": f"Processing {len(active_tasks)}/{MAX_PARALLEL_CHUNKS} chunks in parallel",
                     }
 
                     # If we know the total number of chunks, include it in the result
@@ -207,6 +215,8 @@ async def process_chunks(
                     stats["sent_chunks"] = len(
                         sent_chunk_indices
                     )  # Log how many chunks we've sent to the API
+                    stats["active_tasks"] = len(active_tasks)
+                    stats["max_parallel"] = MAX_PARALLEL_CHUNKS
 
                 await result_queue.put(
                     {
@@ -400,6 +410,11 @@ async def stream_transcription(request: Request, file: UploadFile = File(...)):
                 process_chunks(chunk_queue, result_queue, chunk_order)
             )
 
+            # Log the parallel processing configuration
+            logger.info(
+                f"Started processor task with MAX_PARALLEL_CHUNKS={MAX_PARALLEL_CHUNKS}"
+            )
+
             # Process results from the queue and stream them to the client
             all_done = False
             active_tasks = 2  # splitter and processor
@@ -410,7 +425,7 @@ async def stream_transcription(request: Request, file: UploadFile = File(...)):
             # Add a last_progress_time to track when the last actual progress was made
             last_progress_time = time.time()
             # Add a completion_timeout to force completion after a certain time
-            completion_timeout = 300  # 5 minutes
+            completion_timeout = 900  # 15 minutes
             # Track the expected total number of chunks
             expected_total_chunks = None
 
@@ -685,6 +700,7 @@ async def stream_transcription(request: Request, file: UploadFile = File(...)):
                             "processed": len(results_by_index)
                             if results_by_index
                             else 0,
+                            "max_parallel": MAX_PARALLEL_CHUNKS,
                         },
                     }
                     logger.info(f"Sending periodic update: {update_status}")
@@ -803,7 +819,6 @@ async def stream_transcription(request: Request, file: UploadFile = File(...)):
                             logger.info(
                                 "Splitter task is complete - all audio chunks created"
                             )
-                            # Don't mark all_done yet, as processor may still be working
 
                             # CRITICAL FIX: DO NOT mark as complete when splitter is done
                             # We need to wait for the processor to finish processing all chunks
@@ -811,8 +826,6 @@ async def stream_transcription(request: Request, file: UploadFile = File(...)):
                             logger.info(
                                 f"Waiting for processor to finish processing chunks. Currently processed: {len(results_by_index)}/{expected_total_chunks if expected_total_chunks else '?'}"
                             )
-
-                            # DO NOT set all_done = True here
 
                         elif task_name == "processor":
                             logger.info(
@@ -833,7 +846,7 @@ async def stream_transcription(request: Request, file: UploadFile = File(...)):
                                     f"Processor is done but processed count ({processed_count}) doesn't match sent count ({sent_count}). There may be missing chunks."
                                 )
                                 # Continue processing to see if more results come in
-                                # DO NOT set all_done = True here
+
                             elif results_by_index:
                                 # Verify we have all expected chunks before marking as complete
                                 if (
@@ -843,17 +856,12 @@ async def stream_transcription(request: Request, file: UploadFile = File(...)):
                                     logger.warning(
                                         f"Processor is done but only received {len(results_by_index)}/{expected_total_chunks} chunks. Continuing to wait for more results..."
                                     )
-                                    # DO NOT set all_done = True here
+
                                 else:
                                     logger.info(
                                         f"Processor done with results ({len(results_by_index)} chunks) - marking as complete"
                                     )
                                     all_done = True
-                            else:
-                                logger.warning(
-                                    "Processor done but no results - continuing to wait"
-                                )
-                                # DO NOT set all_done = True here
 
                         # All tasks complete - ONLY mark as done if we have all expected chunks
                         if active_tasks <= 0:
@@ -864,7 +872,7 @@ async def stream_transcription(request: Request, file: UploadFile = File(...)):
                                 logger.warning(
                                     f"All tasks complete but only received {len(results_by_index)}/{expected_total_chunks} chunks. Continuing to wait for more results..."
                                 )
-                                # DO NOT set all_done = True here
+
                             else:
                                 logger.info(
                                     "All tasks complete with all expected chunks - marking as complete"

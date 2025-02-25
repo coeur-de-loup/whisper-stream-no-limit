@@ -8,8 +8,15 @@ import subprocess
 import asyncio
 import uuid
 from typing import Optional
-
+from logger import logger
+from pathlib import Path
 from fastapi import File, UploadFile, BackgroundTasks, HTTPException, APIRouter
+import aiofiles
+
+from whisper import transcribe
+
+TEMP_DIR = Path("/tmp/whisper_chunks")
+TEMP_DIR.mkdir(exist_ok=True)
 
 router = APIRouter()
 
@@ -105,20 +112,45 @@ async def transcribe_audio(
                 }
             )
 
-            # Calculate optimal chunk duration (around 30 seconds to 1 minute per chunk)
-            # Smaller chunks start processing faster
-            chunk_duration = min(
-                60, max(30, total_duration / 20)
-            )  # At least 20 chunks or 30-60s each
+            # Calculate optimal chunk duration based on file size estimation
+            # With 32 kbps and 12 kHz mono audio, we can estimate bytes per second
+            # 32 kbps = 4 KB/s, so we can calculate max duration that fits in Whisper's 25MB limit
+            bytes_per_second = (
+                32 * 1024 / 8
+            )  # 32 kbps converted to bytes per second (4 KB/s)
+            max_whisper_size_bytes = 25 * 1024 * 1024  # 25 MB in bytes
+            max_duration_per_chunk = max_whisper_size_bytes / bytes_per_second
 
-            chunk_count = math.ceil(total_duration / chunk_duration)
+            # Cap the max duration to a reasonable value (e.g., 10 minutes)
+            max_duration_per_chunk = min(max_duration_per_chunk, 600)
+
+            # Using optimized audio settings (32 kbps, 12 kHz) allows us to fit much longer audio segments
+            # within Whisper's 25MB limit. This reduces the number of API calls needed and improves
+            # transcription quality by maintaining more context within each chunk.
+            # Theoretical max duration: ~25MB / (4KB/s) = ~6500 seconds (~108 minutes) per chunk
+            # We cap this to 10 minutes (600s) for practical processing reasons
+
+            # Calculate optimal chunk duration - use larger chunks now that we have optimized audio
+            chunk_duration = min(
+                max_duration_per_chunk, max(120, total_duration / 5)
+            )  # Longer chunks for better context, aim for 5 chunks or 2-minute chunks
+
+            # Add overlap between chunks to avoid cutting words
+            chunk_overlap = min(
+                10.0, chunk_duration * 0.1
+            )  # 10% overlap, max 10 seconds
+
+            chunk_count = math.ceil(total_duration / (chunk_duration - chunk_overlap))
             logger.info(
-                f"Splitting into approximately {chunk_count} chunks of {chunk_duration:.2f}s each"
+                f"Splitting into approximately {chunk_count} chunks of {chunk_duration:.2f}s each with {chunk_overlap:.2f}s overlap"
+            )
+            logger.info(
+                f"Using optimized audio format: 32 kbps, 12 kHz mono (estimated {bytes_per_second / 1024:.2f} KB/s)"
             )
             await result_queue.put(
                 {
                     "status": "update",
-                    "message": f"Splitting into {chunk_count} chunks of {chunk_duration:.2f}s each",
+                    "message": f"Splitting into {chunk_count} chunks of {chunk_duration:.2f}s each with overlap",
                     "total_chunks": chunk_count,
                 }
             )
@@ -153,7 +185,7 @@ async def transcribe_audio(
 
                 output_path = str(session_dir / f"chunk_{i:03d}.mp3")
 
-                # Use ffmpeg to split
+                # Use ffmpeg to split with optimized audio settings for Whisper
                 cmd = [
                     "ffmpeg",
                     "-i",
@@ -162,12 +194,20 @@ async def transcribe_audio(
                     str(start_time_sec),
                     "-t",
                     str(duration_sec),
+                    # Use MP3 codec with 32 kbps bitrate
                     "-c:a",
                     "libmp3lame",
-                    "-q:a",
-                    "2",
+                    "-b:a",
+                    "32k",
+                    # Enhanced audio processing for speech recognition
                     "-af",
-                    "apad=pad_dur=0.5",
+                    "highpass=f=200,lowpass=f=3000",
+                    # Force mono for better speech recognition
+                    "-ac",
+                    "1",
+                    # Sample rate set to 12 kHz as requested
+                    "-ar",
+                    "12000",  # 12 kHz as requested
                     output_path,
                 ]
 
@@ -221,6 +261,8 @@ async def transcribe_audio(
         """Process chunks from the queue as they become available"""
         active_tasks = set()
         processed_chunks = set()
+        # Create a dictionary to store the results from each chunk
+        transcription_results = {}
 
         try:
             while True:
@@ -256,10 +298,25 @@ async def transcribe_audio(
                             start_time = time.time()
 
                             # Process the chunk with Whisper API
-                            chunk_text = await process_audio_chunk(
+                            # For chunks after the first one, include context from previous chunks
+                            chunk_prompt = None
+                            if request and request.prompt:
+                                chunk_prompt = request.prompt
+                            elif idx > 0 and idx - 1 in transcription_results:
+                                # Use the end of the previous chunk as context for this chunk
+                                prev_text = transcription_results[idx - 1].strip()
+                                # Take the last 100 characters as context
+                                context = (
+                                    prev_text[-100:]
+                                    if len(prev_text) > 100
+                                    else prev_text
+                                )
+                                chunk_prompt = f"Previous text: {context}"
+
+                            chunk_text = await transcribe(
                                 path,
                                 language=request.language if request else None,
-                                prompt=request.prompt if request else None,
+                                prompt=chunk_prompt,
                             )
 
                             # Calculate processing time
@@ -269,6 +326,9 @@ async def transcribe_audio(
                                 f"✓ Completed chunk {idx + 1} in {processing_time:.2f}s"
                             )
                             processed_chunks.add(idx)
+
+                            # Store the transcription result with its index
+                            transcription_results[idx] = chunk_text.strip()
 
                             # Send the result back
                             await result_queue.put(
@@ -289,9 +349,6 @@ async def transcribe_audio(
                                     else "in progress",
                                 }
                             )
-
-                            # Store result
-                            await result_queue.put((idx, chunk_text.strip()))
                         except Exception as e:
                             logger.error(f"Error processing chunk {idx + 1}: {str(e)}")
                             # Put a None result to indicate error
@@ -365,16 +422,55 @@ async def transcribe_audio(
                 }
                 await result_queue.put(final_progress)
 
-            # Signal that processor task is complete (this was missing)
+            # Signal that processor task is complete
             await result_queue.put({"status": "task_complete", "task": "processor"})
 
-            # Sort results by chunk index
-            logger.info(f"All chunks processed: {len(processed_chunks)} chunks")
-            results = sorted(await result_queue.get())
-            transcription_text = "\n".join([text for _, text in results])
+            # Combine the transcription results in order
+            logger.info(f"Combining {len(transcription_results)} transcription chunks")
+            sorted_indices = sorted(transcription_results.keys())
+
+            # Improved chunk combination with smarter text joining
+            combined_text = []
+            for idx in sorted_indices:
+                chunk_text = transcription_results[idx].strip()
+                if not chunk_text:
+                    continue
+
+                # Add the chunk text, ensuring proper spacing and punctuation
+                if (
+                    combined_text
+                    and combined_text[-1]
+                    and not combined_text[-1].endswith((".", "!", "?", ":", ";"))
+                ):
+                    # If previous chunk doesn't end with punctuation, ensure proper spacing
+                    combined_text.append(" " + chunk_text)
+                else:
+                    combined_text.append(chunk_text)
+
+            # Join all chunks into a single text, removing any double spaces
+            transcription_text = " ".join(combined_text).replace("  ", " ").strip()
+
+            logger.info(
+                f"Final transcription length: {len(transcription_text)} characters"
+            )
+            if not transcription_text.strip():
+                logger.warning(
+                    "Transcription is empty! Check individual chunk results."
+                )
+                # Add a descriptive message for empty transcriptions
+                transcription_text = (
+                    "No speech was detected in the audio file. This could be due to:\n"
+                    + "- Audio file containing no speech\n"
+                    + "- Audio quality too low for speech recognition\n"
+                    + "- Audio format issues\n"
+                    + "- Speech in an unsupported language\n\n"
+                    + "Try with a different audio file or check the audio quality."
+                )
 
             # Return the results
-            return transcription_text, results
+            return TranscriptionResponse(
+                text=transcription_text, processing_time=time.time() - start_time
+            )
 
         except Exception as e:
             logger.error(f"Error in process_chunks: {str(e)}")
@@ -386,4 +482,41 @@ async def transcribe_audio(
             await result_queue.put({"status": "task_complete", "task": "processor"})
 
             # Return empty results on error
-            return "", []
+            return TranscriptionResponse(
+                text="Error processing transcription: " + str(e),
+                processing_time=time.time() - start_time,
+            )
+
+    try:
+        # Start both tasks
+        splitter_task = asyncio.create_task(split_audio_in_background())
+        processor_task = asyncio.create_task(process_chunks())
+
+        # Wait for the processor task to complete
+        # The processor will process chunks as they become available from the splitter
+        result = await processor_task
+
+        # Clean up the temp file
+        try:
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+                logger.debug(f"Removed temp file: {temp_file_path}")
+        except Exception as cleanup_error:
+            logger.error(
+                f"Error cleaning up temp file {temp_file_path}: {cleanup_error}"
+            )
+
+        return result
+    except Exception as e:
+        logger.error(f"Error in transcribe_audio: {str(e)}")
+        # Clean up on error
+        try:
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+        except:
+            pass
+        # Return a response with the error message instead of empty string
+        return TranscriptionResponse(
+            text=f"Error during transcription: {str(e)}",
+            processing_time=time.time() - start_time,
+        )
