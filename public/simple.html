@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Stream Test</title>
+</head>
+<body>
+    <h1>Streaming Transcription Test</h1>
+    
+    <div>
+        <label for="audioFile">Select audio file:</label>
+        <input type="file" id="audioFile" accept="audio/*">
+        <button id="startBtn">Start Transcription</button>
+    </div>
+    
+    <div id="status">Ready</div>
+    <div id="log" style="margin-top: 20px; border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; font-family: monospace;"></div>
+    
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const audioFileInput = document.getElementById('audioFile');
+        const statusDiv = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const elem = document.createElement('div');
+            elem.style.color = type === 'error' ? 'red' : type === 'success' ? 'green' : 'black';
+            elem.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(elem);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        startBtn.addEventListener('click', async () => {
+            const file = audioFileInput.files[0];
+            if (!file) {
+                log('Please select an audio file', 'error');
+                return;
+            }
+            
+            startBtn.disabled = true;
+            statusDiv.textContent = 'Uploading...';
+            logDiv.innerHTML = '';
+            
+            try {
+                log(`Starting upload of ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+                
+                // Create form data
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Make the request
+                log('Making POST request to /transcribe/stream');
+
+                // Use fetch with manual stream processing for maximum compatibility
+                const response = await fetch(
+                    "http://localhost:8000/transcribe/stream",
+                    {
+                        method: "POST",
+                        body: formData,
+                    }
+                );
+                
+                log(`Response status: ${response.status} ${response.statusText}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error: ${response.status}`);
+                }
+                
+                log(`Response type: ${response.headers.get('content-type')}`);
+                
+                // Create a text decoder
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                
+                log('Starting to read stream...', 'success');
+                
+                // Read the stream
+                while (true) {
+                    const { done, value } = await reader.read();
+                    
+                    if (done) {
+                        log('Stream complete', 'success');
+                        break;
+                    }
+                    
+                    // Decode the chunk
+                    const text = decoder.decode(value, { stream: true });
+                    buffer += text;
+                    
+                    // Log raw data for debugging
+                    log(`Raw chunk received (${value.length} bytes): ${text.substring(0, 100)}${text.length > 100 ? '...' : ''}`);
+                    
+                    // Process complete SSE messages
+                    const messages = buffer.split('\n\n');
+                    buffer = messages.pop() || '';
+                    
+                    for (const message of messages) {
+                        if (message.trim() && message.startsWith('data: ')) {
+                            const data = message.replace('data: ', '');
+                            try {
+                                const parsedData = JSON.parse(data);
+                                log(`Event: ${parsedData.status} - ${JSON.stringify(parsedData)}`, 'success');
+                                
+                                if (parsedData.status === 'complete') {
+                                    statusDiv.textContent = 'Complete!';
+                                }
+                            } catch (e) {
+                                log(`Error parsing message: ${e}`, 'error');
+                                log(`Problem message: ${message}`, 'error');
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                log(error.stack || 'No stack trace available', 'error');
+                statusDiv.textContent = 'Error occurred';
+            } finally {
+                startBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
