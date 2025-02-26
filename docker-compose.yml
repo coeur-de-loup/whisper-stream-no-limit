@@ -22,7 +22,7 @@ services:
     image: nginx:alpine
     volumes:
       - ./public:/usr/share/nginx/html
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx:/etc/nginx/conf.d
     ports:
       - "8362:80"
     depends_on:
