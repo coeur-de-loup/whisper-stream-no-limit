@@ -1,13 +1,20 @@
-version: "3.8"
+version: "3"
 
 services:
-  whisper-transcription-service:
+  frontend:
+    build:
+      context: ./nginx
+    ports:
+      - "${PORT:-80}:80"
+    depends_on:
+      - whisper-api
+    networks:
+      - whisper-network
+
+  whisper-api:
     build:
       context: .
       dockerfile: Dockerfile
-    # Remove direct port mapping so it's not exposed to host
-    # ports:
-    #   - "8000:8000"
     environment:
       - API_KEY=${API_KEY:-your-super-secret-api-key}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -15,22 +22,6 @@ services:
     restart: unless-stopped
     networks:
       - whisper-network
-    # Add container name for easier referencing in client
-    container_name: whisper-api
-
-  client:
-    build:
-      context: .
-      dockerfile: Dockerfile.nginx
-    volumes:
-      - ./public:/usr/share/nginx/html
-    ports:
-      - "8362:80"
-    depends_on:
-      - whisper-transcription-service
-    networks:
-      - whisper-network
-    container_name: whisper-client
 
 # Define a bridge network to allow internal communication
 networks:
