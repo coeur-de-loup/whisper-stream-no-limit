@@ -4,7 +4,7 @@ FROM nginx:alpine
 COPY default.conf /etc/nginx/templates/default.conf.template
 
 # Copy static files
-COPY /public /usr/share/nginx/html
+COPY ./public /usr/share/nginx/html
 
 # Set default value for the environment variable
 # This will be overridden by the COOLIFY_CONTAINER_NAME in Coolify environments
